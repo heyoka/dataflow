@@ -1,5 +1,5 @@
 %% Date: 01.01.17 - 18:43
-%% Ⓒ 2017 LineMetrics GmbH
+%% Ⓒ 2017 heyoka
 -module(df_graph_node).
 -author("Alexander Minichmair").
 

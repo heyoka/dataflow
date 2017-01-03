@@ -1,5 +1,5 @@
 %% Date: 28.12.16 - 18:17
-%% Ⓒ 2016 LineMetrics GmbH
+%% Ⓒ 2016 heyoka
 -module(df_component).
 -author("Alexander Minichmair").
 
