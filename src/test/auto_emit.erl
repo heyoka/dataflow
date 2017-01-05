@@ -15,14 +15,12 @@ init(_Outputs, _Opts, NodeId) ->
    {ok, none, NodeId}.
 
 inports() ->
-   [{1, nil}].
+   [].
 
 outports() ->
    inports().
 
 process(_Inport, Value, State) ->
-   io:format("~p process, ~p~n",[State, {_Inport, Value}]),
-
    {ok, State}.
 
 handle_info(Req, State) ->

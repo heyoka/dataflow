@@ -21,7 +21,7 @@ outports() ->
 process(_Inport, Value, State) ->
    io:format("~p process, ~p~n",[State, {_Inport, Value}]),
 
-   {emit, {1, Value*2}, State}.
+   {emit, {1, Value}, State}.
 
 handle_info(Request, State) ->
    io:format("~p request: ~p~n", [State, Request]),
