@@ -9,8 +9,8 @@
 -behavior(df_graph_node).
 
 %% API
--export([start_link/5, inports/1, outports/1]).
--export([start_node/4]).
+-export([start_link/5]).
+-export([start_node/4, inports/1, outports/1]).
 
 %% Callback API
 -export([request_items/2, emit/2]).
@@ -139,6 +139,19 @@ start_link(Component, NodeId, Inports, Outports, Args) ->
 start_node(Server, Inputs, Subscriptions, FlowMode) ->
    gen_server:call(Server, {start, Inputs, Subscriptions, FlowMode}).
 
+inports(Module) ->
+   case erlang:function_exported(Module, inports, 0) of
+      true -> Module:inports();
+      false -> inports()
+   end.
+
+outports(Module) ->
+   case erlang:function_exported(Module, outports, 0) of
+      true -> Module:outports();
+      false -> outports()
+   end.
+
+
 %%% Callback API %%%
 request_items(Port, PublisherPids) when is_list(PublisherPids) ->
    [Pid ! {request, self(), Port} || Pid <- PublisherPids].
@@ -170,7 +183,7 @@ init([Component, NodeId, Inports, Outports, Args]) ->
    {stop, Reason :: term(), NewState :: #state{}}).
 handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
     State=#state{component = CB, cb_state = CBState, node_id = NId}) ->
-%%   io:format("~p | ~p 'start' with : ~p ~n", [State#state.node_id, self(), {Inputs, Subscriptions}]),
+%%   ?LOG("~p | ~p 'start' with : ~p ~n", [State#state.node_id, self(), {Inputs, Subscriptions}]),
    {ok, AutoRequest, NewCBState} = CB:init(NId, Inputs, CBState),
 
    AR = case FlowMode of pull -> AutoRequest; push -> none end,
@@ -179,13 +192,9 @@ handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
       subscriptions = Subscriptions, inports = Inputs, auto_request = AR,
       cb_state = NewCBState, flow_mode = FlowMode, cb_handle_info = CallbackHandlesInfo}}
 ;
-handle_call({inports}, _From, State=#state{component = Module}) ->
-   Res = Module:inports(),
-   {reply, {ok, Res}, State}
-;
-handle_call({outports}, _From, State=#state{component = Module}) ->
-   Res = Module:outports(),
-   {reply, {ok, Res}, State}.
+handle_call(_What, _From, State) ->
+   {reply, State}
+.
 
 
 -spec(handle_cast(Request :: term(), State :: #state{}) ->
@@ -198,19 +207,19 @@ handle_cast(_Request, State) ->
 
 
 handle_info({request, ReqPid, ReqPort}, State=#state{subscriptions = Ss}) ->
-   io:format("Node ~p requests item: ~p~n",[ReqPid, {ReqPid, ReqPort}]),
+   ?LOG("Node ~p requests item: ~p",[ReqPid, {ReqPid, ReqPort}]),
    NewSubs = df_subscription:request(Ss, ReqPid, ReqPort),
    {noreply, State#state{subscriptions =  NewSubs}};
 
 handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component = Module,
    subscriptions = Subs, flow_mode = FMode, auto_request = AR}) ->
 
-   io:format("Node ~p got item: ~p~n",[State#state.node_id, {Inport, Value}]),
+   ?LOG("Node ~p got item: ~p",[State#state.node_id, {Inport, Value}]),
    {NewState, Requested, REmitted} =
       case Module:process(Inport, Value, CBState) of
          {emit, {Port, Emitted}, NState} ->
             NewSubs = df_subscription:output(Subs, Emitted, Port),
-            io:format("Node ~p is emitting: ~p~n",[State#state.node_id, {Port, Emitted}]),
+            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                false, true};
          {request, {Port, PPids}, NState} when is_list(PPids) ->
@@ -220,7 +229,7 @@ handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component 
          {emit_request, {Port, Emitted}, {ReqPort, PPids}, NState} when is_list(PPids)->
             NewSubs = df_subscription:output(Subs, Emitted, Port),
             maybe_request_items(ReqPort, PPids, FMode),
-            io:format("Node ~p is emitting: ~p~n",[State#state.node_id, {Port, Emitted}]),
+            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                true, false};
          {ok, NewCBState} ->
@@ -247,7 +256,7 @@ handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component 
 handle_info({emit, {Outport, Value}}, State=#state{subscriptions = Ss,
       flow_mode = FMode, auto_request = AR}) ->
 
-   io:format("Node ~p is emitting: ~p~n",[State#state.node_id, {Outport, Value}]),
+   ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Outport, Value}]),
    NewSubs = df_subscription:output(Ss, Value, Outport),
    NewState = State#state{subscriptions = NewSubs},
    case AR of
@@ -261,7 +270,7 @@ handle_info(pull, State=#state{inports = Ins}) ->
    {noreply, State}
 ;
 handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}) ->
-   io:format("~p got STOP message~n",[N]),
+   ?LOG("~p got STOP message~n",[N]),
    case erlang:function_exported(Mod, shutdown, 1) of
       true -> Mod:shutdown(CBState);
       false -> ok
@@ -311,20 +320,8 @@ maybe_request_items(Port, Pids, pull) ->
 %%% PORTS for modules
 %%%
 
-inports(Module) ->
-   case erlang:function_exported(Module, inports, 0) of
-      true -> Module:inports();
-      false -> inports()
-   end.
-
 inports() ->
    [{1, nil}].
-
-outports(Module) ->
-   case erlang:function_exported(Module, outports, 0) of
-      true -> Module:outports();
-      false -> outports()
-   end.
 
 outports() ->
    inports().

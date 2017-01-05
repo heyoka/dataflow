@@ -2,6 +2,11 @@
 %% Ⓒ 2016 LineMetrics GmbH
 -author("Alexander Minichmair").
 
+-ifdef(debug).
+-define(LOG(Msg, Args), io:format(Msg ++ "~n", Args)).
+-else.
+-define(LOG(Msg, Args), ok).
+-endif.
 
 -record(data_point, {
    ts                :: non_neg_integer(), %% timestamp in ms

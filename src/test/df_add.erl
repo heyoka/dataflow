@@ -1,6 +1,6 @@
 %% Date: 02.01.17 - 15:42
 %% Ⓒ 2017 heyoka
--module(add).
+-module(df_add).
 -author("Alexander Minichmair").
 
 -behavior(df_component).

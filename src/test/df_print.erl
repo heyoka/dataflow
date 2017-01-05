@@ -1,11 +1,13 @@
 %% Date: 30.12.16 - 23:01
 %% Ⓒ 2016 heyoka
--module(print).
+-module(df_print).
 -author("Alexander Minichmair").
 
 -behavior(df_component).
+
+-include("dataflow.hrl").
 %% API
--export([init/3, process/3]).
+-export([init/3, process/3, shutdown/1]).
 
 -record(state, {
    inputs,
@@ -15,13 +17,16 @@
 }).
 
 init(NodeId, Inputs, Args) ->
-   io:format("~p init~n",[NodeId]),
+   ?LOG("~p init",[NodeId]),
    {_Ports, Publishers} = lists:unzip(Inputs),
    {ok, emit,
       #state{inputs = Inputs, node_id = NodeId, arguments = Args, publishers = Publishers}}.
 
 process(_Inport, Value, State=#state{node_id = NodeId}) ->
-   io:format("~p process, ~p~n",[NodeId, {_Inport, Value}]),
+   ?LOG("~p process, ~p",[NodeId, {_Inport, Value}]),
    {emit, {1, Value*2}, State}.
+
+shutdown(_State) ->
+   ?LOG("shutdown in ~p called",[?MODULE]).
 
 
