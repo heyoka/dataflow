@@ -9,7 +9,7 @@
 -behavior(df_graph_node).
 
 %% API
--export([start_link/5, inports/0, outports/0]).
+-export([start_link/5, inports/1, outports/1]).
 -export([start_node/4]).
 
 %% Callback API
@@ -30,6 +30,7 @@
    inports              :: list(), %% list of inputs {port, pid}
    outports             :: list(),  %% list of outputs {port, pid}
    cb_state             :: cbstate(), %% state for callback
+   cb_handle_info       :: true | false,
    subscriptions        :: list(#subscription{}),
    auto_request         :: none | all | emit
 
@@ -54,14 +55,23 @@
 
 
 %% @doc
-%% provide a list of inports for the component
+%% optional
+%% provide a list of inports for the component :
+%%
+%% -callback inports()  -> {ok, list()}.
+%%
 %% @end
--callback inports()  -> {ok, list()}.
+
+
 
 %% @doc
-%% provide a list of outports for the component
+%% optional
+%% provide a list of outports for the component:
+%%
+%% -callback outports() -> {ok, list()}.
+%%
 %% @end
--callback outports() -> {ok, list()}.
+
 
 %% @doc
 %% process value or batch incoming on specific inport
@@ -98,10 +108,24 @@
        {error, Reason :: term()}.
 
 %% @doc
-%% handle other messages that will be sent to this process
+%% optional
+%% handle other messages that will be sent to this process :
+%%
+%% -callback handle_info(Request :: term(), State :: cbstate())
+%% -> {ok, NewCallbackState :: cbstate()} | {error, Reason :: term()}.
 %% @end
--callback handle_info(Request :: term(), State :: cbstate())
-      -> {ok, NewCallbackState :: cbstate()} | {error, Reason :: term()}.
+
+
+%% @doc
+%% optional
+%% called when component process is about to stop :
+%%
+%% -callback shutdown(State :: cbstate())
+%% -> any().
+%% @end
+
+
+%%-optional_callbacks([inports/0, outports/0, handle_info/2, shutdown/1]).
 
 %%%===================================================================
 %%% API
@@ -150,10 +174,10 @@ handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
    {ok, AutoRequest, NewCBState} = CB:init(NId, Inputs, CBState),
 
    AR = case FlowMode of pull -> AutoRequest; push -> none end,
-
+   CallbackHandlesInfo = erlang:function_exported(CB, handle_info, 2),
    {reply, ok, State#state{
       subscriptions = Subscriptions, inports = Inputs, auto_request = AR,
-      cb_state = NewCBState, flow_mode = FlowMode}}
+      cb_state = NewCBState, flow_mode = FlowMode, cb_handle_info = CallbackHandlesInfo}}
 ;
 handle_call({inports}, _From, State=#state{component = Module}) ->
    Res = Module:inports(),
@@ -236,16 +260,23 @@ handle_info(pull, State=#state{inports = Ins}) ->
    lists:foreach(fun({Port, Pid}) -> request_items(Port, [Pid]) end, Ins),
    {noreply, State}
 ;
-
-handle_info(Req, State=#state{component = Module, cb_state = CB}) ->
+handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}) ->
+   io:format("~p got STOP message~n",[N]),
+   case erlang:function_exported(Mod, shutdown, 1) of
+      true -> Mod:shutdown(CBState);
+      false -> ok
+   end,
+   {stop, normal, State}
+;
+handle_info(Req, State=#state{component = Module, cb_state = CB, cb_handle_info = true}) ->
    NewCB = case Module:handle_info(Req, CB) of
               {noreply, CB0} -> CB0;
               {error, _Reason} -> error
            end,
    {noreply, State#state{cb_state = NewCB}}
 ;
-handle_info(stop, State) ->
-   {stop, normal, State}
+handle_info(_Req, State=#state{cb_handle_info = false}) ->
+   {noreply, State}
 .
 
 %%--------------------------------------------------------------------
@@ -275,8 +306,25 @@ maybe_request_items(_Port, _Pids, push) ->
 maybe_request_items(Port, Pids, pull) ->
    request_items(Port, Pids).
 
+
+%%%===================================================================
+%%% PORTS for modules
+%%%
+
+inports(Module) ->
+   case erlang:function_exported(Module, inports, 0) of
+      true -> Module:inports();
+      false -> inports()
+   end.
+
 inports() ->
-   erlang:error(not_implemented).
+   [{1, nil}].
+
+outports(Module) ->
+   case erlang:function_exported(Module, outports, 0) of
+      true -> Module:outports();
+      false -> outports()
+   end.
 
 outports() ->
-   erlang:error(not_implemented).
+   inports().

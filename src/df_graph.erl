@@ -9,7 +9,7 @@
 
 %% API
 -export([start_link/2]).
--export([add_node/4, add_edge/6, nodes/1, edges/1, start_graph/2]).
+-export([add_node/4, add_edge/6, nodes/1, edges/1, start_graph/2, stop/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -23,7 +23,8 @@
    id                   :: non_neg_integer() | string(),
    running  = false     :: true | false,
    started  = false     :: true | false,
-   graph    = nil
+   graph    = nil,
+   nodes    = []        :: list(tuple())
 }).
 
 %%%===================================================================
@@ -38,6 +39,9 @@ start_link(Id, Params) ->
 
 start_graph(Graph, FlowMode) ->
    gen_server:call(Graph, {start, FlowMode}).
+
+stop(Graph) ->
+   Graph ! stop.
 
 add_node(Graph, NodeId, Component, Metadata) ->
    gen_server:call(Graph, {add_node, NodeId, Component, Metadata}).
@@ -70,8 +74,8 @@ init([Id, _Params]) ->
    {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
    {stop, Reason :: term(), NewState :: #state{}}).
 handle_call({add_node, NodeId, Component, Metadata}, _From, State) ->
-   Inports = Component:inports(),
-   OutPorts = Component:outports(),
+   Inports = df_component:inports(Component),
+   OutPorts = df_component:outports(Component),
 
    Label = #{component => Component, component_pid => nil,
    inports => Inports, outports => OutPorts, metadata => Metadata},
@@ -118,7 +122,7 @@ handle_call({start, FlowMode}, _From, State=#state{graph = G}) ->
       pull -> lists:foreach(fun({_NodeId, NPid}) -> NPid ! pull end, Nodes)
    end,
 
-   {reply, ok, State#state{running = true, started = true}}.
+   {reply, ok, State#state{running = true, started = true, nodes = Nodes}}.
 
 -spec(handle_cast(Request :: term(), State :: #state{}) ->
    {noreply, NewState :: #state{}} |
@@ -132,8 +136,13 @@ handle_cast(_Request, State) ->
    {noreply, NewState :: #state{}} |
    {noreply, NewState :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term(), NewState :: #state{}}).
-handle_info(_Req, State=#state{}) ->
-   {noreply, State}.
+handle_info(stop, State=#state{running = Running, nodes = Nodes}) ->
+   case Running of
+      %% stop all components
+      true -> lists:foreach(fun({_NodeId, NPid}) -> NPid ! stop end, Nodes);
+      false -> ok
+   end,
+   {stop, normal, State}.
 
 
 terminate(_Reason, _State) ->

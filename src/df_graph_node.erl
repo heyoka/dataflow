@@ -7,9 +7,9 @@
 %% @doc
 %% provide a list of inports for the component
 %% @end
--callback inports()  -> {ok, list()}.
+-callback inports(Module :: atom())  -> {ok, list()}.
 
 %% @doc
 %% provide a list of outports for the component
 %% @end
--callback outports() -> {ok, list()}.
+-callback outports(Module :: atom()) -> {ok, list()}.
