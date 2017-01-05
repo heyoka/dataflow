@@ -270,7 +270,7 @@ handle_info(pull, State=#state{inports = Ins}) ->
    {noreply, State}
 ;
 handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}) ->
-   ?LOG("~p got STOP message~n",[N]),
+   ?LOG("~p got STOP message",[N]),
    case erlang:function_exported(Mod, shutdown, 1) of
       true -> Mod:shutdown(CBState);
       false -> ok
