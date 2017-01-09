@@ -324,7 +324,7 @@ handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}
 ;
 handle_info(Req, State=#state{component = Module, cb_state = CB, cb_handle_info = true}) ->
    NewCB = case Module:handle_info(Req, CB) of
-              {noreply, CB0} -> CB0;
+              {ok, CB0} -> CB0;
               {error, _Reason} -> error
            end,
    {noreply, State#state{cb_state = NewCB}}
