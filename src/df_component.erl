@@ -13,7 +13,7 @@
 -export([start_node/4, inports/1, outports/1]).
 
 %% Callback API
--export([request_items/2, emit/2]).
+%%-export([request_items/2, emit/1, emit/2]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -22,6 +22,14 @@
    handle_info/2,
    terminate/2,
    code_change/3]).
+
+
+-type cbstate()      :: term().
+
+-type auto_request() :: 'all' | 'emit' | 'none'.
+
+-type df_port()      :: non_neg_integer().
+
 
 -record(state, {
    flow_mode = push     :: push | pull,
@@ -40,40 +48,20 @@
 %%%===================================================================
 %%% CALLBACKS
 %%%===================================================================
--type cbstate()      :: term().
-
--type auto_request() :: 'all' | 'emit' | 'none'.
-
--type df_port()      :: non_neg_integer().
-
 
 %% @doc
+%% INIT/3
+%%
 %% initialisation
 %% @end
 -callback init(NodeId :: term(), Inputs :: list(), Args :: term())
        -> {ok, auto_request(), cbstate()}.
 
 
-%% @doc
-%% optional
-%% provide a list of inports for the component :
-%%
-%% -callback inports()  -> {ok, list()}.
-%%
-%% @end
-
-
 
 %% @doc
-%% optional
-%% provide a list of outports for the component:
+%% PROCESS/2
 %%
-%% -callback outports() -> {ok, list()}.
-%%
-%% @end
-
-
-%% @doc
 %% process value or batch incoming on specific inport
 %%
 %% return values :
@@ -107,7 +95,52 @@
 
        {error, Reason :: term()}.
 
+
+%%%==========================================================
+%%% OPTIONAL CALLBACKS
+%%% =========================================================
+
 %% @doc
+%% OPTIONS/0
+%%
+%% optional
+%%
+%% retrieve options (with default values optionally) for a component
+%% for an optional parameter, provide Default term
+%%
+%% -callback options() ->
+%% list(
+%%    {Name :: atom(), Type :: atom(), Default :: term()} | {Name :: atom(), Type :: atom()}
+%% ).
+%% @end
+
+
+%% @doc
+%% INPORTS/0
+%%
+%% optional
+%% provide a list of inports for the component :
+%%
+%% -callback inports()  -> {ok, list()}.
+%%
+%% @end
+
+
+
+%% @doc
+%% OUTPORTS/0
+%%
+%% optional
+%% provide a list of outports for the component:
+%%
+%% -callback outports() -> {ok, list()}.
+%%
+%% @end
+
+
+%% @doc
+%% HANDLE_INFO/2
+%%
 %% optional
 %% handle other messages that will be sent to this process :
 %%
@@ -117,6 +150,8 @@
 
 
 %% @doc
+%% SHUTDOWN/1
+%%
 %% optional
 %% called when component process is about to stop :
 %%
@@ -124,8 +159,9 @@
 %% -> any().
 %% @end
 
+%%-optional_callbacks([inports/0, outports/0, handle_info/2, shutdown/1]). %% erlang 18+
 
-%%-optional_callbacks([inports/0, outports/0, handle_info/2, shutdown/1]).
+
 
 %%%===================================================================
 %%% API
@@ -152,12 +188,19 @@ outports(Module) ->
    end.
 
 
-%%% Callback API %%%
-request_items(Port, PublisherPids) when is_list(PublisherPids) ->
-   [Pid ! {request, self(), Port} || Pid <- PublisherPids].
+%%%==========================================================
+%%% Callback API
+%%%
+%%% these are exposed through the dataflow module now !
+%%%==========================================================
+%%request_items(Port, PublisherPids) when is_list(PublisherPids) ->
+%%   [Pid ! {request, self(), Port} || Pid <- PublisherPids].
+%%
+%%emit(Value) ->
+%%   emit(1, Value).
+%%emit(Port, Value) ->
+%%   erlang:send_after(0, self(), {emit, {Port, Value}}).
 
-emit(Port, Value) ->
-   erlang:send_after(0, self(), {emit, {Port, Value}}).
 
 %%% %%%%%%%%%%%%%%%%
 %%%===================================================================
@@ -168,23 +211,18 @@ emit(Port, Value) ->
    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term()} | ignore).
 init([Component, NodeId, Inports, Outports, Args]) ->
+   {module, Component} = code:ensure_loaded(Component),
+   ?LOG("init component ~p",[Component]),
    InputPorts = lists:map(fun({_Pid, Port}) -> Port end, Inports),
    {ok, #state{component = Component, node_id = NodeId, subscriptions = [],
       outports = Outports, inports = InputPorts, cb_state = Args}}.
 
 
--spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
-    State :: #state{}) ->
-   {reply, Reply :: term(), NewState :: #state{}} |
-   {reply, Reply :: term(), NewState :: #state{}, timeout() | hibernate} |
-   {noreply, NewState :: #state{}} |
-   {noreply, NewState :: #state{}, timeout() | hibernate} |
-   {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
-   {stop, Reason :: term(), NewState :: #state{}}).
 handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
     State=#state{component = CB, cb_state = CBState, node_id = NId}) ->
 %%   ?LOG("~p | ~p 'start' with : ~p ~n", [State#state.node_id, self(), {Inputs, Subscriptions}]),
-   {ok, AutoRequest, NewCBState} = CB:init(NId, Inputs, CBState),
+
+   {ok, AutoRequest, NewCBState} = CB:init(NId, Inputs, dataflow:build_options(CB, CBState)),
 
    AR = case FlowMode of pull -> AutoRequest; push -> none end,
    CallbackHandlesInfo = erlang:function_exported(CB, handle_info, 2),
@@ -196,11 +234,6 @@ handle_call(_What, _From, State) ->
    {reply, State}
 .
 
-
--spec(handle_cast(Request :: term(), State :: #state{}) ->
-   {noreply, NewState :: #state{}} |
-   {noreply, NewState :: #state{}, timeout() | hibernate} |
-   {stop, Reason :: term(), NewState :: #state{}}).
 handle_cast(_Request, State) ->
    {noreply, State}.
 
@@ -217,19 +250,31 @@ handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component 
    ?LOG("Node ~p got item: ~p",[State#state.node_id, {Inport, Value}]),
    {NewState, Requested, REmitted} =
       case Module:process(Inport, Value, CBState) of
+
          {emit, {Port, Emitted}, NState} ->
             NewSubs = df_subscription:output(Subs, Emitted, Port),
             ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
+            {State#state{subscriptions = NewSubs, cb_state = NState},
+               false, true};
+         {emit, Emitted, NState} ->
+            NewSubs = df_subscription:output(Subs, Emitted, 1),
+            ?LOG("Node ~p is emitting default port: ~p",[State#state.node_id, {1, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                false, true};
          {request, {Port, PPids}, NState} when is_list(PPids) ->
             maybe_request_items(Port, PPids, FMode),
             {State#state{cb_state = NState},
                true, false};
-         {emit_request, {Port, Emitted}, {ReqPort, PPids}, NState} when is_list(PPids)->
+         {emit_request, {Port, Emitted}, {ReqPort, PPids}, NState} when is_list(PPids) ->
             NewSubs = df_subscription:output(Subs, Emitted, Port),
             maybe_request_items(ReqPort, PPids, FMode),
             ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
+            {State#state{subscriptions = NewSubs, cb_state = NState},
+               true, false};
+         {emit_request, Emitted, {ReqPort, PPids}, NState} when is_list(PPids) ->
+            NewSubs = df_subscription:output(Subs, Emitted, 1),
+            maybe_request_items(ReqPort, PPids, FMode),
+            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {1, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                true, false};
          {ok, NewCBState} ->
@@ -266,7 +311,7 @@ handle_info({emit, {Outport, Value}}, State=#state{subscriptions = Ss,
    {noreply, NewState};
 
 handle_info(pull, State=#state{inports = Ins}) ->
-   lists:foreach(fun({Port, Pid}) -> request_items(Port, [Pid]) end, Ins),
+   lists:foreach(fun({Port, Pid}) -> dataflow:request_items(Port, [Pid]) end, Ins),
    {noreply, State}
 ;
 handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}) ->
@@ -313,7 +358,7 @@ request_all(Inports, pull) ->
 maybe_request_items(_Port, _Pids, push) ->
    ok;
 maybe_request_items(Port, Pids, pull) ->
-   request_items(Port, Pids).
+   dataflow:request_items(Port, Pids).
 
 
 %%%===================================================================

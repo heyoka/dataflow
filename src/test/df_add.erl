@@ -6,16 +6,19 @@
 -behavior(df_component).
 
 %% API
--export([init/3, process/3]).
+-export([init/3, process/3, options/0]).
 
 -record(state, {
-   add,
+   addend,
    node_id
 }).
 
-init(NodeId, _Inputs, [Args]) ->
-   {ok, all, #state{add = Args, node_id = NodeId}}.
+options() ->
+   [{addend, number}].
 
-process(_Inport, Value, State = #state{add = Add}) ->
+init(NodeId, _Inputs, #{addend := Addend}) ->
+   {ok, all, #state{addend = Addend, node_id = NodeId}}.
+
+process(_Inport, Value, State = #state{addend = Add}) ->
    NewValue = Value + Add,
-   {emit, {1, NewValue}, State}.
+   {emit, NewValue, State}.

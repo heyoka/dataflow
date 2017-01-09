@@ -7,8 +7,10 @@
 
 -behavior(df_component).
 %% API
--export([init/3, process/3, shutdown/1]).
+-export([init/3, process/3, shutdown/1, options/0]).
 
+options() ->
+   [].
 
 init(NodeId, _Inputs, _Args) ->
    ?LOG("~p init:node",[NodeId]),
@@ -17,7 +19,7 @@ init(NodeId, _Inputs, _Args) ->
 process(_Inport, Value, State) ->
    ?LOG("~p process, ~p",[State, {_Inport, Value}]),
 
-   {emit, {1, Value}, State}.
+   {emit, Value, State}.
 
 shutdown(_State) ->
    ?LOG("shutdown in ~p called",[?MODULE]).
