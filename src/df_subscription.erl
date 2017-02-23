@@ -4,6 +4,8 @@
 %% module works with #subscription records and handles out-routing of values
 %% and in-routing of requests from other nodes in order to handle push mode(s)
 %%
+%% this module will actually send the messages to the other df_component nodes in the graph
+%%
 -module(df_subscription).
 -author("Alexander Minichmair").
 
@@ -23,7 +25,7 @@ new(FlowMode, Publisher, PublisherPort, Subscriber, SubscriberPort) ->
    }.
 
 %% outputting a value on a specific out-port
-output(Subscriptions, Value, Port) ->
+output(Subscriptions, Value, Port) when is_list(Subscriptions) ->
    Subs = get(Port, Subscriptions),
    NewSubs = lists:map(fun(X) -> output(X, Value) end, Subs),
    OSubs = proplists:delete(Port, Subscriptions),

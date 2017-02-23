@@ -33,12 +33,11 @@
 
 -record(state, {
    flow_mode = push     :: push | pull,
-   component            :: atom(), %% callbacks module name
    node_id              :: term(), %% this nodes id
-   inports              :: list(), %% list of inputs {port, pid}
-   outports             :: list(),  %% list of outputs {port, pid}
+   component            :: atom(), %% callbacks module name
    cb_state             :: cbstate(), %% state for callback
    cb_handle_info       :: true | false,
+   inports              :: list(), %% list of inputs {port, pid}
    subscriptions        :: list(#subscription{}),
    auto_request         :: none | all | emit
 
@@ -108,9 +107,12 @@
 %% retrieve options (with default values optionally) for a component
 %% for an optional parameter, provide Default term
 %%
+%% options with no 'Default' value, will be treated as mandatory
+%%
 %% -callback options() ->
 %% list(
-%%    {Name :: atom(), Type :: atom(), Default :: term()} | {Name :: atom(), Type :: atom()}
+%%    {Name :: atom(), Type :: atom(), Default :: term()} |
+%%    {Name :: atom(), Type :: atom()}
 %% ).
 %% @end
 
@@ -215,7 +217,7 @@ init([Component, NodeId, Inports, Outports, Args]) ->
    ?LOG("init component ~p",[Component]),
    InputPorts = lists:map(fun({_Pid, Port}) -> Port end, Inports),
    {ok, #state{component = Component, node_id = NodeId, subscriptions = [],
-      outports = Outports, inports = InputPorts, cb_state = Args}}.
+      inports = InputPorts, cb_state = Args}}.
 
 
 handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
@@ -226,9 +228,14 @@ handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
 
    AR = case FlowMode of pull -> AutoRequest; push -> none end,
    CallbackHandlesInfo = erlang:function_exported(CB, handle_info, 2),
-   {reply, ok, State#state{
-      subscriptions = Subscriptions, inports = Inputs, auto_request = AR,
-      cb_state = NewCBState, flow_mode = FlowMode, cb_handle_info = CallbackHandlesInfo}}
+   {reply, ok,
+      State#state{
+         subscriptions = Subscriptions,
+         inports = Inputs,
+         auto_request = AR,
+         cb_state = NewCBState,
+         flow_mode = FlowMode,
+         cb_handle_info = CallbackHandlesInfo}}
 ;
 handle_call(_What, _From, State) ->
    {reply, State}
@@ -238,7 +245,12 @@ handle_cast(_Request, State) ->
    {noreply, State}.
 
 
-
+%% @doc
+%% these are the messages from and to other dataflow nodes
+%% do not use these tags in your callback 'handle_info' functions :
+%% 'reqeust' | 'item' | 'emit' | 'pull' | 'stop'
+%%
+%% @end
 handle_info({request, ReqPid, ReqPort}, State=#state{subscriptions = Ss}) ->
    ?LOG("Node ~p requests item: ~p",[ReqPid, {ReqPid, ReqPort}]),
    NewSubs = df_subscription:request(Ss, ReqPid, ReqPort),

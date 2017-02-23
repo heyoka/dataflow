@@ -10,8 +10,8 @@
 
 pipe_stop() ->
    G = pipe(),
-   timer:sleep(7000),
-   G ! stop.
+   erlang:send_after(7000, G, stop).
+%%   G ! stop.
 
 pipe() ->
    N1 = "print1", N2 = "print2", N3 = "print3", N4 = "print4",
