@@ -27,6 +27,11 @@ do_build_options([], _) -> #{};
 do_build_options(Opts, L) when is_list(L), is_list(Opts) ->
    lists:foldl(
       fun
+         ({OptName, is_set}, Acc) ->
+            case proplists:get_value(OptName, L) of
+               undefined -> Acc#{OptName => false};
+               true      -> Acc#{OptName => true}
+            end;
          ({OptName, OptType, Default}, Acc) ->
             case proplists:get_value(OptName, L) of
                undefined -> Acc#{OptName => Default};
