@@ -52,6 +52,7 @@ do_build_options(Opts, L) when is_list(L), is_list(Opts) ->
 val(Val, number) when is_integer(Val) orelse is_float(Val) -> Val;
 val(Val, integer) when is_integer(Val) -> Val;
 val(Val, float) when is_float(Val) -> Val;
+val(Val, binary) when is_binary(Val) -> Val;
 val(Val, string) when is_binary(Val) -> Val;
 val(Val, list) when is_list(Val) -> Val;
 val(Val, atom) when is_atom(Val) -> Val;

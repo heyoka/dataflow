@@ -9,6 +9,12 @@
 %% API
 -export([init/3, process/3, shutdown/1, options/0]).
 
+params() ->
+   [
+      {duration}, %% for shift (for example)
+      {node, {port, 2}} %% for a join node, the binary identifier gets connected to port 2
+   ].
+
 options() ->
    [
       {module, atom, noop},
