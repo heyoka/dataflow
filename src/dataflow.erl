@@ -58,4 +58,5 @@ val(Val, list) when is_list(Val) -> Val;
 val(Val, atom) when is_atom(Val) -> Val;
 val(true, bool) -> true;
 val(false, bool) -> false;
+val(Val, lambda) -> Val;
 val(V, Type) -> erlang:error({wrong_option_type, {V, Type}}).
