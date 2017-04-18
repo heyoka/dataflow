@@ -46,7 +46,7 @@ Start the computation
 
 Example 
 -------
-
+_Define 4 Nodes and connect them in a pipe fashion, start the graph in 'push' mode_
 
     pipe2() ->
        pipe2("graph_p").
