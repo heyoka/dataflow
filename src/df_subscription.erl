@@ -1,8 +1,9 @@
 %% Date: 28.12.16 - 19:43
 %% Ⓒ 2016 heyoka
 %%
+%% @doc
 %% module works with #subscription records and handles out-routing of values
-%% and in-routing of requests from other nodes in order to handle push mode(s)
+%% and in-routing of requests from other nodes (in order to handle push mode(s))
 %%
 %% this module will actually send the messages to the other df_component nodes in the graph
 %%

@@ -1,12 +1,53 @@
 -module(dataflow).
 
 %% API exports
+-export([new_graph/0, create_graph/2, start_graph/1, start_graph/2, add_node/2, add_edge/2]).
+
 -export([request_items/2, emit/1, build_options/2]).
+
+
+-type graph_definition() :: #{nodes => [], edges => []}.
 
 %%====================================================================
 %% CALLBACK API functions
 %%====================================================================
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-spec new_graph() -> graph_definition().
+new_graph() ->
+   #{nodes => [], edges => []}.
+
+-spec add_node({any(), atom()} | {any(), atom(), list()}, graph_definition()) -> graph_definition().
+add_node({NodeName, Component}, Defs) when is_atom(Component), is_map(Defs) ->
+   add_node({NodeName, Component, []}, Defs);
+add_node({NodeName, Component, Params}, Defs=#{nodes := Nodes}) when is_atom(Component), is_map(Defs), is_list(Params) ->
+   Defs#{nodes := [{NodeName, Component, Params} | Nodes]}.
+
+-spec add_edge(tuple(), graph_definition()) -> graph_definition().
+add_edge({NodeOut, PortOut, NodeIn, PortIn}, Defs) ->
+   add_edge({NodeOut, PortOut, NodeIn, PortIn, []}, Defs);
+add_edge({NodeOut, PortOut, NodeIn, PortIn, Params}, Defs = #{edges := Edges}) ->
+   Defs#{egdes := [{NodeOut, PortOut, NodeIn, PortIn, Params} | Edges]}.
+
+
+-spec create_graph(any(), graph_definition()) -> {ok, pid()} | {error, Reason::any()}.
+create_graph(Id, Definitions) when is_map(Definitions) ->
+   Res = graph_sup:new(Id, Definitions),
+   io:format("new graph: ~p~n",[Res]),
+   Res.
+
+start_graph(Graph) ->
+   start_graph(Graph, push).
+start_graph(Graph, Mode) ->
+   df_graph:start_graph(Graph, Mode).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%% component functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 request_items(Port, PublisherPids) when is_list(PublisherPids) ->
    [Pid ! {request, self(), Port} || Pid <- PublisherPids].
 
@@ -15,12 +56,16 @@ emit(Value) ->
 emit(Port, Value) ->
    erlang:send_after(0, self(), {emit, {Port, Value}}).
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 -spec build_options(atom(), list({atom(), term()})) -> map().
 build_options(Component, L) ->
    Opts = case erlang:function_exported(Component, options, 0) of
              true -> io:format("Module ~p has function options/0 exported~n",[Component]),Component:options();
-             false -> io:format("Module ~p has NO function options/0 exported~n",[Component]),[]
+             false -> %io:format("Module ~p has NO function options/0 exported~n",[Component]),
+                        []
           end,
    do_build_options(Opts, L).
 do_build_options([], _) -> #{};
@@ -58,5 +103,5 @@ val(Val, list) when is_list(Val) -> Val;
 val(Val, atom) when is_atom(Val) -> Val;
 val(true, bool) -> true;
 val(false, bool) -> false;
-val(Val, lambda) -> Val;
+val(Val, lambda) when is_function(Val) -> Val;
 val(V, Type) -> erlang:error({wrong_option_type, {V, Type}}).

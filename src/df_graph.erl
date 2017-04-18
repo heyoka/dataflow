@@ -9,7 +9,18 @@
 
 %% API
 -export([start_link/2]).
--export([add_node/4, add_edge/6, nodes/1, edges/1, start_graph/2, stop/1]).
+
+-export([
+   add_node/3,
+   add_node/4,
+   add_edge/5,
+   add_edge/6,
+   nodes/1,
+   edges/1,
+   start_graph/2,
+   stop/1,
+   sink_nodes/1,
+   source_nodes/1]).
 
 %% gen_server callbacks
 -export([init/1,
@@ -31,6 +42,7 @@
 %%% API
 %%%===================================================================
 
+
 -spec(start_link(Id :: term(), Params :: term()) ->
    {ok, Pid :: pid()} | ignore | {error, Reason :: term()}).
 start_link(Id, Params) ->
@@ -43,9 +55,13 @@ start_graph(Graph, FlowMode) ->
 stop(Graph) ->
    Graph ! stop.
 
+add_node(Graph, NodeId, Component) ->
+   add_node(Graph, NodeId, Component, []).
 add_node(Graph, NodeId, Component, Metadata) ->
    gen_server:call(Graph, {add_node, NodeId, Component, Metadata}).
 
+add_edge(Graph, SourceNode, SourcePort, TargetNode, TargetPort) ->
+   add_edge(Graph, SourceNode, SourcePort, TargetNode, TargetPort, []).
 add_edge(Graph, SourceNode, SourcePort, TargetNode, TargetPort, Metadata) ->
    gen_server:call(Graph, {add_edge, SourceNode, SourcePort, TargetNode, TargetPort, Metadata}).
 
@@ -54,15 +70,30 @@ nodes(Graph) ->
 
 edges(Graph) ->
    gen_server:call(Graph, {edges}).
+
+sink_nodes(Graph) ->
+   gen_server:call(Graph, {sink_nodes}).
+
+source_nodes(Graph) ->
+   gen_server:call(Graph, {source_nodes}).
+
 %%%===================================================================
 %%% gen_server callbacks
 %%%===================================================================
 
+%% @doc the graph will be fully configured and connected, ready to be started
 -spec(init(Args :: term()) ->
    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term()} | ignore).
+init([Id, #{nodes := Nodes, edges := Edges}]=T) ->
+   gen_event:notify(df_events, io_lib:format("new df_graph starts with ~p~n" ,[T])),
+   Graph = digraph:new([acyclic, protected]),
+   lists:foreach(fun(E) -> build_node(Graph, E) end, Nodes),
+   lists:foreach(fun(E) -> build_edge(Graph, E) end, Edges),
+   {ok, #state{graph = Graph, id = Id}}
+;
 init([Id, _Params]) ->
-   Graph = digraph:new([protected]),
+   Graph = digraph:new([acyclic, protected]),
    {ok, #state{graph = Graph, id = Id}}.
 
 -spec(handle_call(Request :: term(), From :: {pid(), Tag :: term()},
@@ -78,7 +109,8 @@ handle_call({add_node, NodeId, Component, Metadata}, _From, State) ->
    OutPorts = df_component:outports(Component),
 
    Label = #{component => Component, component_pid => nil,
-   inports => Inports, outports => OutPorts, metadata => Metadata},
+      inports => Inports, outports => OutPorts, metadata => Metadata},
+
    _NewVertex = digraph:add_vertex(State#state.graph, NodeId, Label),
 
    {reply, ok, State};
@@ -89,6 +121,14 @@ handle_call({add_edge, SourceNode, SourcePort, TargetNode, TargetPort, Metadata}
 handle_call({nodes}, _From, State) ->
    All = digraph:vertices(State#state.graph),
    {reply, All, State};
+handle_call({sink_nodes}, _From, State = #state{graph = G}) ->
+   OutNodes = digraph:sink_vertices(G),
+   io:format("OutNodes: ~p~n" , [OutNodes]),
+   {reply, OutNodes, State};
+handle_call({source_nodes}, _From, State = #state{graph = G}) ->
+   InNodes = digraph:source_vertices(G),
+   io:format("InNodes: ~p~n" , [InNodes]),
+   {reply, InNodes, State};
 handle_call({edges}, _From, State) ->
    All = digraph:vertices(State#state.graph),
    {reply, All, State};
@@ -157,6 +197,22 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+build_node(Graph, {NodeId, Component}) ->
+   build_node(Graph, {NodeId, Component, []});
+build_node(Graph, {NodeId, Component, Metadata}) ->
+   Inports = df_component:inports(Component),
+   OutPorts = df_component:outports(Component),
+   Label = #{component => Component, component_pid => nil,
+      inports => Inports, outports => OutPorts, metadata => Metadata},
+   _NewVertex = digraph:add_vertex(Graph, NodeId, Label).
+build_edge(Graph, {SourceNode, SourcePort, TargetNode, TargetPort}) ->
+   build_edge(Graph, {SourceNode, SourcePort, TargetNode, TargetPort, []});
+build_edge(Graph, {SourceNode, SourcePort, TargetNode, TargetPort, Metadata}) ->
+   Label = #{src_port => SourcePort, tgt_port => TargetPort, metadata => Metadata},
+   _NewEdge = digraph:add_edge(Graph, SourceNode, TargetNode, Label).
+
+
+
 build_subscriptions(Graph, Node, Nodes, FlowMode) ->
    OutEdges = digraph:out_edges(Graph, Node),
    Subscriptions = lists:foldl(

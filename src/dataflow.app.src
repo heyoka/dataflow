@@ -1,15 +1,16 @@
 {application, dataflow,
- [{description, "An OTP library"},
+ [{description, "An OTP library for Dataflow Computations in Erlang"},
   {vsn, "0.1.0"},
   {registered, []},
   {applications,
    [kernel,
     stdlib
    ]},
+  {mod, { dataflow_app, []}},
   {env,[]},
   {modules, []},
 
-  {maintainers, []},
+  {maintainers, ["heyoka"]},
   {licenses, []},
   {links, []}
  ]}.

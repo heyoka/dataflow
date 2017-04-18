@@ -39,7 +39,9 @@
    cb_handle_info       :: true | false,
    inports              :: list(), %% list of inputs {port, pid}
    subscriptions        :: list(#subscription{}),
-   auto_request         :: none | all | emit
+   auto_request         :: none | all | emit,
+   history              :: list(),
+   emitted = 0          :: non_neg_integer()
 
 }).
 
@@ -212,7 +214,7 @@ outports(Module) ->
 -spec(init(Args :: term()) ->
    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term()} | ignore).
-init([Component, NodeId, Inports, Outports, Args]) ->
+init([Component, NodeId, Inports, _Outports, Args]) ->
    {module, Component} = code:ensure_loaded(Component),
    ?LOG("init component ~p",[Component]),
    InputPorts = lists:map(fun({_Pid, Port}) -> Port end, Inports),
@@ -311,7 +313,7 @@ handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component 
    {noreply, NewState};
 
 handle_info({emit, {Outport, Value}}, State=#state{subscriptions = Ss,
-      flow_mode = FMode, auto_request = AR}) ->
+      flow_mode = FMode, auto_request = AR, emitted = EmitCount}) ->
 
    ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Outport, Value}]),
    NewSubs = df_subscription:output(Ss, Value, Outport),
@@ -320,7 +322,7 @@ handle_info({emit, {Outport, Value}}, State=#state{subscriptions = Ss,
       none  -> ok;
       _     -> request_all(State#state.inports, FMode)
    end,
-   {noreply, NewState};
+   {noreply, NewState#state{emitted = EmitCount+1}};
 
 handle_info(pull, State=#state{inports = Ins}) ->
    lists:foreach(fun({Port, Pid}) -> dataflow:request_items(Port, [Pid]) end, Ins),
