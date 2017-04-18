@@ -30,7 +30,7 @@ add_node({NodeName, Component, Params}, Defs=#{nodes := Nodes}) when is_atom(Com
 add_edge({NodeOut, PortOut, NodeIn, PortIn}, Defs) ->
    add_edge({NodeOut, PortOut, NodeIn, PortIn, []}, Defs);
 add_edge({NodeOut, PortOut, NodeIn, PortIn, Params}, Defs = #{edges := Edges}) ->
-   Defs#{egdes := [{NodeOut, PortOut, NodeIn, PortIn, Params} | Edges]}.
+   Defs#{edges := [{NodeOut, PortOut, NodeIn, PortIn, Params} | Edges]}.
 
 
 -spec create_graph(any(), graph_definition()) -> {ok, pid()} | {error, Reason::any()}.
