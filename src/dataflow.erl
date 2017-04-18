@@ -16,29 +16,33 @@
 %%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%% @doc get a new graph definition map
 -spec new_graph() -> graph_definition().
 new_graph() ->
    #{nodes => [], edges => []}.
 
+%% @doc graph_definition() : add graph node
 -spec add_node({any(), atom()} | {any(), atom(), list()}, graph_definition()) -> graph_definition().
 add_node({NodeName, Component}, Defs) when is_atom(Component), is_map(Defs) ->
    add_node({NodeName, Component, []}, Defs);
 add_node({NodeName, Component, Params}, Defs=#{nodes := Nodes}) when is_atom(Component), is_map(Defs), is_list(Params) ->
    Defs#{nodes := [{NodeName, Component, Params} | Nodes]}.
 
+%% @doc add a new edge to #{nodes := Nodes, edges := Edges}
 -spec add_edge(tuple(), graph_definition()) -> graph_definition().
 add_edge({NodeOut, PortOut, NodeIn, PortIn}, Defs) ->
    add_edge({NodeOut, PortOut, NodeIn, PortIn, []}, Defs);
 add_edge({NodeOut, PortOut, NodeIn, PortIn, Params}, Defs = #{edges := Edges}) ->
    Defs#{edges := [{NodeOut, PortOut, NodeIn, PortIn, Params} | Edges]}.
 
-
+%% @doc start a new df_graph process
 -spec create_graph(any(), graph_definition()) -> {ok, pid()} | {error, Reason::any()}.
 create_graph(Id, Definitions) when is_map(Definitions) ->
    Res = graph_sup:new(Id, Definitions),
    io:format("new graph: ~p~n",[Res]),
    Res.
 
+%% @doc start the graph computation
 start_graph(Graph) ->
    start_graph(Graph, push).
 start_graph(Graph, Mode) ->
