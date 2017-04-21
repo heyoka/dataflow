@@ -85,11 +85,13 @@ source_nodes(Graph) ->
 -spec(init(Args :: term()) ->
    {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term()} | ignore).
-init([Id, #{nodes := Nodes, edges := Edges}]=T) ->
-   gen_event:notify(df_events, io_lib:format("new df_graph starts with ~p~n" ,[T])),
+init([Id, #{nodes := Nodes, edges := Edges}]=_T) ->
+   gen_event:notify(dfevent_graph, {new_graph, Id, self()}),
    Graph = digraph:new([acyclic, protected]),
-   lists:foreach(fun(E) -> build_node(Graph, E) end, Nodes),
-   lists:foreach(fun(E) -> build_edge(Graph, E) end, Edges),
+   lists:foreach(fun(E) -> gen_event:notify(dfevent_graph, {add_node, Id, E}),
+                           build_node(Graph, E) end, Nodes),
+   lists:foreach(fun(E) -> gen_event:notify(dfevent_graph, {add_edge, Id, E}),
+                           build_edge(Graph, E) end, Edges),
    {ok, #state{graph = Graph, id = Id}}
 ;
 init([Id, _Params]) ->
@@ -104,7 +106,8 @@ init([Id, _Params]) ->
    {noreply, NewState :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term(), Reply :: term(), NewState :: #state{}} |
    {stop, Reason :: term(), NewState :: #state{}}).
-handle_call({add_node, NodeId, Component, Metadata}, _From, State) ->
+handle_call({add_node, NodeId, Component, Metadata}, _From, State=#state{id = Id}) ->
+   gen_event:notify(dfevent_graph, {add_node, Id, {NodeId, Component}}),
    Inports = df_component:inports(Component),
    OutPorts = df_component:outports(Component),
 
@@ -114,7 +117,8 @@ handle_call({add_node, NodeId, Component, Metadata}, _From, State) ->
    _NewVertex = digraph:add_vertex(State#state.graph, NodeId, Label),
 
    {reply, ok, State};
-handle_call({add_edge, SourceNode, SourcePort, TargetNode, TargetPort, Metadata}, _From, State) ->
+handle_call({add_edge, SourceNode, SourcePort, TargetNode, TargetPort, Metadata}, _From, State=#state{id = Id}) ->
+   gen_event:notify(dfevent_graph, {add_edge, Id, {SourceNode, SourcePort, TargetNode, TargetPort}}),
    Label = #{src_port => SourcePort, tgt_port => TargetPort, metadata => Metadata},
    _NewEdge = digraph:add_edge(State#state.graph, SourceNode, TargetNode, Label),
    {reply, ok, State};
@@ -123,16 +127,14 @@ handle_call({nodes}, _From, State) ->
    {reply, All, State};
 handle_call({sink_nodes}, _From, State = #state{graph = G}) ->
    OutNodes = digraph:sink_vertices(G),
-   io:format("OutNodes: ~p~n" , [OutNodes]),
    {reply, OutNodes, State};
 handle_call({source_nodes}, _From, State = #state{graph = G}) ->
    InNodes = digraph:source_vertices(G),
-   io:format("InNodes: ~p~n" , [InNodes]),
    {reply, InNodes, State};
 handle_call({edges}, _From, State) ->
    All = digraph:vertices(State#state.graph),
    {reply, All, State};
-handle_call({start, FlowMode}, _From, State=#state{graph = G}) ->
+handle_call({start, FlowMode}, _From, State=#state{graph = G, id = Id}) ->
    Nodes0 = digraph:vertices(G),
 
 %% build : [{NodeId, Pid}]
@@ -161,7 +163,7 @@ handle_call({start, FlowMode}, _From, State=#state{graph = G}) ->
       push -> ok;
       pull -> lists:foreach(fun({_NodeId, NPid}) -> NPid ! pull end, Nodes)
    end,
-
+   gen_event:notify(dfevent_graph, {start, Id, FlowMode}),
    {reply, ok, State#state{running = true, started = true, nodes = Nodes}}.
 
 -spec(handle_cast(Request :: term(), State :: #state{}) ->
@@ -176,12 +178,13 @@ handle_cast(_Request, State) ->
    {noreply, NewState :: #state{}} |
    {noreply, NewState :: #state{}, timeout() | hibernate} |
    {stop, Reason :: term(), NewState :: #state{}}).
-handle_info(stop, State=#state{running = Running, nodes = Nodes}) ->
+handle_info(stop, State=#state{running = Running, nodes = Nodes, id = Id}) ->
    case Running of
       %% stop all components
       true -> lists:foreach(fun({_NodeId, NPid}) -> NPid ! stop end, Nodes);
       false -> ok
    end,
+   gen_event:notify(dfevent_graph, {stop, Id}),
    {stop, normal, State}.
 
 

@@ -2,6 +2,8 @@
 %% Ⓒ 2016 LineMetrics GmbH
 -author("Alexander Minichmair").
 
+-include("df_types.hrl").
+
 -ifdef(debug).
 -define(LOG(Msg, Args), io:format(Msg ++ "~n", Args)).
 -else.

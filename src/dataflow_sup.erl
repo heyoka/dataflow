@@ -54,14 +54,28 @@ init([]) ->
    MaxRestarts = 10,
    MaxSecondsBetweenRestarts = 3600,
    Procs = [
-      {df_events,
-         {gen_event, start_link, [{local, df_events}]},
-         permanent, 5000, worker, dynamic},
-
       {graph_sup,
          {graph_sup, start_link, []},
          permanent, infinity, supervisor, [graph_sup]}
    ],
 
    SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
-   {ok, {SupFlags, Procs}}.
+   {ok, {SupFlags, Procs ++ event_mgrs()}}.
+
+
+event_mgrs() ->
+   Managers =
+      [
+         dfevent_system,
+         dfevent_graph,
+         dfevent_component,
+         dfevent_debug
+      ],
+   lists:map(
+      fun(M) ->
+         {M,
+            {dataflow_events, start_link, [M]},
+            permanent, 5000, worker, dynamic}
+      end,
+      Managers
+   ).

@@ -15,7 +15,8 @@ start() ->
    application:ensure_all_started(dataflow).
 
 start(_StartType, _StartArgs) ->
-   dataflow_sup:start_link().
+   Sup = dataflow_sup:start_link(),
+   Sup.
 
 stop(_State) ->
    ok.

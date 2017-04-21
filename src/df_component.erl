@@ -24,11 +24,11 @@
    code_change/3]).
 
 
--type cbstate()      :: term().
+-type cbstate()         :: term().
 
--type auto_request() :: 'all' | 'emit' | 'none'.
+-type auto_request()    :: 'all' | 'emit' | 'none'.
 
--type df_port()      :: non_neg_integer().
+-type df_port()         :: non_neg_integer().
 
 
 -record(state, {
@@ -54,7 +54,7 @@
 %% INIT/3
 %%
 %% initialisation
-%% @end
+%%
 -callback init(NodeId :: term(), Inputs :: list(), Args :: term())
        -> {ok, auto_request(), cbstate()}.
 
@@ -79,7 +79,7 @@
 %% :: emit and request a value
 %% {emit_request, OutPort :: port(), Value :: term(), ReqPort :: port(), ReqPid :: pid(), cbstate()}
 %%
-%% @end
+%%
 -callback process(Inport :: non_neg_integer(), Value :: #data_point{} | #data_batch{}, State :: cbstate())
        ->
        {ok, cbstate()} |
@@ -111,11 +111,11 @@
 %%
 %% options with no 'Default' value, will be treated as mandatory
 %%
-%% -callback options() ->
-%% list(
-%%    {Name :: atom(), Type :: atom(), Default :: term()} |
-%%    {Name :: atom(), Type :: atom()}
-%% ).
+ -callback options() ->
+ list(
+    {Name :: atom(), Type :: dataflow:option_value(), Default :: dataflow:option_value()} |
+    {Name :: atom(), Type :: atom()}
+ ).
 %% @end
 
 
@@ -127,7 +127,7 @@
 %%
 %% -callback inports()  -> {ok, list()}.
 %%
-%% @end
+%%
 
 
 
@@ -139,7 +139,7 @@
 %%
 %% -callback outports() -> {ok, list()}.
 %%
-%% @end
+%%
 
 
 %% @doc
@@ -224,7 +224,8 @@ init([Component, NodeId, Inports, _Outports, Args]) ->
 
 handle_call({start, Inputs, Subscriptions, FlowMode}, _From,
     State=#state{component = CB, cb_state = CBState, node_id = NId}) ->
-%%   ?LOG("~p | ~p 'start' with : ~p ~n", [State#state.node_id, self(), {Inputs, Subscriptions}]),
+
+   gen_event:notify(dfevent_component, {start, State#state.node_id, FlowMode}),
 
    {ok, AutoRequest, NewCBState} = CB:init(NId, Inputs, dataflow:build_options(CB, CBState)),
 
@@ -251,44 +252,47 @@ handle_cast(_Request, State) ->
 %% these are the messages from and to other dataflow nodes
 %% do not use these tags in your callback 'handle_info' functions :
 %% 'reqeust' | 'item' | 'emit' | 'pull' | 'stop'
+%% you will not receive the info message in the callback
 %%
 %% @end
 handle_info({request, ReqPid, ReqPort}, State=#state{subscriptions = Ss}) ->
-   ?LOG("Node ~p requests item: ~p",[ReqPid, {ReqPid, ReqPort}]),
    NewSubs = df_subscription:request(Ss, ReqPid, ReqPort),
    {noreply, State#state{subscriptions =  NewSubs}};
 
 handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component = Module,
    subscriptions = Subs, flow_mode = FMode, auto_request = AR}) ->
 
-   ?LOG("Node ~p got item: ~p",[State#state.node_id, {Inport, Value}]),
+   gen_event:notify(dfevent_component, {item, State#state.node_id, {Inport, Value}}),
    {NewState, Requested, REmitted} =
       case Module:process(Inport, Value, CBState) of
 
          {emit, {Port, Emitted}, NState} ->
+            gen_event:notify(dfevent_component, {emitting, State#state.node_id, {Port, Emitted}}),
             NewSubs = df_subscription:output(Subs, Emitted, Port),
-            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
+%%            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                false, true};
          {emit, Emitted, NState} ->
+            gen_event:notify(dfevent_component, {emitting, State#state.node_id, {1, Emitted}}),
             NewSubs = df_subscription:output(Subs, Emitted, 1),
-            ?LOG("Node ~p is emitting default port: ~p",[State#state.node_id, {1, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                false, true};
          {request, {Port, PPids}, NState} when is_list(PPids) ->
+            gen_event:notify(dfevent_component, {requests, State#state.node_id, Port}),
             maybe_request_items(Port, PPids, FMode),
             {State#state{cb_state = NState},
                true, false};
          {emit_request, {Port, Emitted}, {ReqPort, PPids}, NState} when is_list(PPids) ->
+            gen_event:notify(dfevent_component, {emitting_requests, State#state.node_id, {Port, Emitted}}),
             NewSubs = df_subscription:output(Subs, Emitted, Port),
             maybe_request_items(ReqPort, PPids, FMode),
             ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Port, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                true, false};
          {emit_request, Emitted, {ReqPort, PPids}, NState} when is_list(PPids) ->
+            gen_event:notify(dfevent_component, {emitting_requests, State#state.node_id, {1, Emitted}}),
             NewSubs = df_subscription:output(Subs, Emitted, 1),
             maybe_request_items(ReqPort, PPids, FMode),
-            ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {1, Emitted}]),
             {State#state{subscriptions = NewSubs, cb_state = NState},
                true, false};
          {ok, NewCBState} ->
@@ -315,7 +319,8 @@ handle_info({item, {Inport, Value}}, State=#state{cb_state = CBState, component 
 handle_info({emit, {Outport, Value}}, State=#state{subscriptions = Ss,
       flow_mode = FMode, auto_request = AR, emitted = EmitCount}) ->
 
-   ?LOG("Node ~p is emitting: ~p",[State#state.node_id, {Outport, Value}]),
+   gen_event:notify(dfevent_component, {emitting, State#state.node_id, {Outport, Value}}),
+
    NewSubs = df_subscription:output(Ss, Value, Outport),
    NewState = State#state{subscriptions = NewSubs},
    case AR of
@@ -329,7 +334,7 @@ handle_info(pull, State=#state{inports = Ins}) ->
    {noreply, State}
 ;
 handle_info(stop, State=#state{node_id = N, component = Mod, cb_state = CBState}) ->
-   ?LOG("~p got STOP message",[N]),
+   gen_event:notify(dfevent_component, {stopping, N, Mod}),
    case erlang:function_exported(Mod, shutdown, 1) of
       true -> Mod:shutdown(CBState);
       false -> ok

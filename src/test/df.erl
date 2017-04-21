@@ -15,16 +15,16 @@ pipe_stop() ->
 
 pipe() ->
    N1 = "print1", N2 = "print2", N3 = "print3", N4 = "print4",
-   {ok, Graph} = dataflow:new_graph("graph1",[]),
-   df_graph:add_node(Graph, N1, df_auto_emit),
-   df_graph:add_node(Graph, N2, df_print),
+   {ok, Graph} = df_graph:start_link("graph1",[]),
+   df_graph:add_node(Graph, N1, df_auto_emit, []),
+   df_graph:add_node(Graph, N2, df_print, []),
    df_graph:add_node(Graph, N3, df_print, [node3_args_here]),
    df_graph:add_node(Graph, N4, df_print, []),
    df_graph:add_edge(Graph, N1, 1, N2, 1),
    df_graph:add_edge(Graph, N2, 1, N3, 1, []),
    df_graph:add_edge(Graph, N3, 1, N4, 1),
 %%   Graph ! info,
-   dataflow:start_graph(Graph, push),
+   df_graph:start_graph(Graph, push),
    Graph.
 
 %% @doc use new dataflow api

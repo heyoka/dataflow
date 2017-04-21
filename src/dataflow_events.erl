@@ -6,8 +6,8 @@
 -behaviour(gen_event).
 
 %% API
--export([start_link/0,
-   add_handler/0]).
+-export([start_link/1,
+   add_handler/1]).
 
 %% gen_event callbacks
 -export([init/1,
@@ -31,9 +31,10 @@
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(start_link() -> {ok, pid()} | {error, {already_started, pid()}}).
-start_link() ->
-   gen_event:start_link({local, df_events}).
+-spec(start_link(atom()) -> {ok, pid()} | {error, {already_started, pid()}}).
+start_link(RegName) ->
+   Ret = gen_event:start_link({local, RegName}),
+   Ret.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -41,9 +42,9 @@ start_link() ->
 %%
 %% @end
 %%--------------------------------------------------------------------
--spec(add_handler() -> ok | {'EXIT', Reason :: term()} | term()).
-add_handler() ->
-   gen_event:add_handler(?SERVER, ?MODULE, []).
+-spec(add_handler(EventMgrName :: atom()) -> ok | {'EXIT', Reason :: term()} | term()).
+add_handler(EventMgrName) ->
+   gen_event:add_sup_handler(EventMgrName, ?MODULE, []).
 
 %%%===================================================================
 %%% gen_event callbacks
@@ -81,7 +82,7 @@ init([]) ->
       Handler2 :: (atom() | {atom(), Id :: term()}), Args2 :: term()} |
    remove_handler).
 handle_event(Event, State) ->
-   io:format("event: ~p~n",[Event]),
+   io:format("EVENT: ~p~n",[Event]),
    {ok, State}.
 
 %%--------------------------------------------------------------------
