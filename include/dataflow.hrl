@@ -1,5 +1,5 @@
 %% Date: 28.12.16 - 18:28
-%% Ⓒ 2016 LineMetrics GmbH
+%% Ⓒ 2016 Alexander Minichmair
 -author("Alexander Minichmair").
 
 -include("df_types.hrl").

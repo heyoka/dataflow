@@ -1,5 +1,5 @@
 %% Date: 20.04.17 - 20:45
-%% Ⓒ 2017 LineMetrics GmbH
+%% Ⓒ 2017 Alexander Minichmair
 -author("Alexander Minichmair").
 
 

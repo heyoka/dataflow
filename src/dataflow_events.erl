@@ -1,5 +1,5 @@
 %% Date: 17.04.17 - 17:50
-%% Ⓒ 2017 LineMetrics GmbH
+%% Ⓒ 2017 heyoka
 -module(dataflow_events).
 -author("Alexander Minichmair").
 
