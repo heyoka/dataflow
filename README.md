@@ -219,8 +219,12 @@ Implement df_component behavior
 Test
 ----
 
-    G = df:pipe2().
+    % for debug console-output, add built-in event handlers
     
+    dataflow:add_debug_handler().
+    
+
+    G = df:pipe2().
     
     G ! stop.
     
@@ -230,5 +234,7 @@ Todo
 ----
 
 * more tests
-* make use of gen_event for all logging, debugging, flow-system messages
+* api-docs for event-handlers
+* docs for component options
+* make edoc work for df_component
 * single-run mode
