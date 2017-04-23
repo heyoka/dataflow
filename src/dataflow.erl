@@ -78,7 +78,12 @@ build_options(Component, L) ->
              false -> %io:format("Module ~p has NO function options/0 exported~n",[Component]),
                         []
           end,
-   do_build_options(Opts, L).
+   case catch(do_build_options(Opts, L)) of
+      Opts when is_map(Opts) -> Opts;
+      #{} -> #{};
+      {error,What} -> exit({bad_option, {Component, What}});
+      {'EXIT',{What, _}} -> exit({bad_option, {Component, What}})
+   end.
 do_build_options([], _) -> #{};
 do_build_options(Opts, L) when is_list(L), is_list(Opts) ->
    lists:foldl(
@@ -95,7 +100,7 @@ do_build_options(Opts, L) when is_list(L), is_list(Opts) ->
             end;
          ({OptName, OptType}, Acc) ->
             case proplists:get_value(OptName, L) of
-               undefined -> erlang:error({option_missing, OptName});
+               undefined -> erlang:error({option_missing, {OptName, OptType}});
                V        -> Acc#{OptName => val(V, OptType)}
             end
       end,
@@ -133,7 +138,9 @@ val(Val, atom_list) when is_list(Val) ->
 val(Val, lambda_list) when is_list(Val) ->
    list_val(Val, fun(E) -> is_function(E) end);
 
-val(V, Type) -> erlang:error({wrong_option_type, {V, Type}}).
+val(Val, any) -> Val;
+
+val(V, Type) -> erlang:error({wrong_option_type, {{given, V}, {should_be, Type}}}).
 
 list_val(Val, Fun) ->
    case lists:all(Fun, Val) of

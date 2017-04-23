@@ -7,7 +7,8 @@
 
 -type graph_definition() :: #{nodes => [], edges => []}.
 
--type option_name()              :: is_set         |
+-type option_name()              :: any            |
+                                    is_set         |
                                     number         |
                                     integer        |
                                     float          |
@@ -26,7 +27,8 @@
                                     lambda_list
 .
 
--type option_is_set()            :: none().
+-type option_any()               :: any().
+-type option_is_set()            :: any().
 -type option_number()            :: integer() | float().
 -type option_integer()           :: integer().
 -type option_float()             :: float().
@@ -46,19 +48,20 @@
 
 
 
--type option_value()             :: option_is_set() |
-                                    option_number() |
-                                    option_integer() |
-                                    option_float() |
-                                    option_string() |
-                                    option_binary() |
-                                    option_atom() |
-                                    option_list() |
-                                    option_lambda() |
-                                    option_bool() |
-                                    option_number_list() |
-                                    option_integer_list() |
-                                    option_float_list() |
-                                    option_binary_list() |
-                                    option_atom_list() |
+-type option_value()             :: option_any()            |
+                                    option_is_set()         |
+                                    option_number()         |
+                                    option_integer()        |
+                                    option_float()          |
+                                    option_string()         |
+                                    option_binary()         |
+                                    option_atom()           |
+                                    option_list()           |
+                                    option_lambda()         |
+                                    option_bool()           |
+                                    option_number_list()    |
+                                    option_integer_list()   |
+                                    option_float_list()     |
+                                    option_binary_list()    |
+                                    option_atom_list()      |
                                     option_lamda_list().

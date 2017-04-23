@@ -5,8 +5,12 @@
 -include("dataflow.hrl").
 -behavior(df_component).
 %% API
--export([init/3, process/3]).
+-export([init/3, process/3, options/0]).
 
+options() ->
+   [
+      {as, string_list}
+   ].
 
 init(_Outputs, _Opts, NodeId) ->
    ?LOG("~p init:node",[NodeId]),
