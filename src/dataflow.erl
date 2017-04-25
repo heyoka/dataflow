@@ -79,8 +79,7 @@ build_options(Component, L) ->
                         []
           end,
    case catch(do_build_options(Opts, L)) of
-      Opts when is_map(Opts) -> Opts;
-      #{} -> #{};
+      Opts0 when is_map(Opts0) -> Opts0;
       {error,What} -> exit({bad_option, {Component, What}});
       {'EXIT',{What, _}} -> exit({bad_option, {Component, What}})
    end.

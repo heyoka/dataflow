@@ -33,7 +33,7 @@ pipe2() ->
 pipe2(G) ->
    N1 = "p1", N2 = "p2", N3 = "p3", N4 = "p4",
    Nodes = [
-      {N1, df_auto_emit, [{as, <<"atom">>}]},
+      {N1, df_auto_emit, [{as, [<<"atom">>]}]},
       {N2, df_print},
       {N3, df_print, [node3_args_here]},
       {N4, df_print}
